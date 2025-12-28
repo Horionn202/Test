@@ -6,7 +6,19 @@ local VIP = require(ReplicatedStorage.Shared.VIPConfig)
 
 local rebirthEvent = ReplicatedStorage.Remotes:WaitForChild("Rebirth")
 
+-- 🛡️ ANTI-EXPLOIT: Rate Limiting (Rebirth es más crítico, 3 segundos)
+local COOLDOWN = 3 -- segundos entre rebirths
+local lastRebirth = {} -- {[UserId] = tick()}
+
 rebirthEvent.OnServerEvent:Connect(function(player)
+	-- 🛡️ ANTI-EXPLOIT: Rate Limiting
+	local now = tick()
+	local userId = player.UserId
+	if lastRebirth[userId] and (now - lastRebirth[userId]) < COOLDOWN then
+		warn("[ANTI-EXPLOIT] Player", player.Name, "spamming Rebirth")
+		return
+	end
+
 	local stats = player:WaitForChild("Stats")
 	local leaderstats = player:WaitForChild("leaderstats")
 
@@ -17,23 +29,33 @@ rebirthEvent.OnServerEvent:Connect(function(player)
 	local capacity = stats:WaitForChild("Capacity")
 	local inventory = stats:WaitForChild("Inventory")
 	local inventoryValue = stats:WaitForChild("InventoryValue")
+	local CapacityUtils = require(ReplicatedStorage.Shared.CapacityUtils)
 
-	local nextLevel = rebirths.Value + 1
+	local currentRebirths = rebirths.Value
+	local nextLevel = currentRebirths + 1
 	local config = RebirthConfig.Levels[nextLevel]
 	if not config then
 		return
 	end
 
-	-- ❌ NO TIENE DINERO
+	-- 🛡️ ANTI-EXPLOIT: Validar dinero
 	if money.Value < config.Price then
+		warn("[ANTI-EXPLOIT] Player", player.Name, "tried to rebirth without money. Has:", money.Value, "Needs:", config.Price)
 		return
 	end
 
-	-- 🔁 RESETEO TOTAL
+	-- 🛡️ ANTI-EXPLOIT: Validar que no salte niveles de rebirth
+	if nextLevel ~= currentRebirths + 1 then
+		warn("[ANTI-EXPLOIT] Player", player.Name, "tried to skip rebirth levels")
+		return
+	end
+
+	-- ✅ 🔁 RESETEO TOTAL
 	money.Value = 0
 	backpackLevel.Value = 1
 	inventory.Value = 0
 	inventoryValue.Value = 0
+	capacity.Value = CapacityUtils.Calculate(player)
 
 	-- 🔁 BASE CAPACITY AL NIVEL 1
 	baseCapacity.Value = Upgrades.Backpack.Levels[1].Capacity
@@ -50,4 +72,9 @@ rebirthEvent.OnServerEvent:Connect(function(player)
 	end
 
 	capacity.Value = finalCapacity
+
+	-- 🛡️ Actualizar cooldown
+	lastRebirth[userId] = now
+
+	print("[REBIRTH] Player", player.Name, "reached rebirth level", nextLevel)
 end)

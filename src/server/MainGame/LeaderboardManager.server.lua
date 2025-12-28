@@ -24,6 +24,11 @@ Players.PlayerAdded:Connect(function(player)
 	BackpackLevel.Value = 1
 	BackpackLevel.Parent = stats
 
+	local speedLevel = Instance.new("IntValue")
+	speedLevel.Name = "SpeedLevel"
+	speedLevel.Value = 0
+	speedLevel.Parent = stats
+
 	-- 🔁 REBIRTHS
 	local Rebirths = Instance.new("IntValue")
 	Rebirths.Name = "Rebirths"

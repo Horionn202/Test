@@ -5,6 +5,10 @@ local VIP = require(ReplicatedStorage.Shared.VIPConfig)
 
 print("Upgrade handler cargado")
 
+-- 🛡️ ANTI-EXPLOIT: Rate Limiting
+local COOLDOWN = 1 -- segundos entre compras
+local lastPurchase = {} -- {[UserId] = tick()}
+
 local function recalcCapacity(player)
 	local stats = player:FindFirstChild("Stats")
 	if not stats then
@@ -13,12 +17,18 @@ local function recalcCapacity(player)
 
 	local baseCapacity = stats:FindFirstChild("BaseCapacity")
 	local capacity = stats:FindFirstChild("Capacity")
-	if not baseCapacity or not capacity then
+	local rebirths = stats:FindFirstChild("Rebirths")
+
+	if not baseCapacity or not capacity or not rebirths then
 		return
 	end
 
 	local finalCapacity = baseCapacity.Value
 
+	-- 🔥 BONUS POR REBIRTH
+	finalCapacity += rebirths.Value * 5
+
+	-- ⭐ VIP
 	if player:GetAttribute("VIP") then
 		finalCapacity += VIP.Bonuses.ExtraCapacity
 	end
@@ -28,6 +38,14 @@ end
 
 BuyUpgrade.OnServerEvent:Connect(function(player, upgradeName)
 	if upgradeName ~= "Backpack" then
+		return
+	end
+
+	-- 🛡️ ANTI-EXPLOIT: Rate Limiting
+	local now = tick()
+	local userId = player.UserId
+	if lastPurchase[userId] and (now - lastPurchase[userId]) < COOLDOWN then
+		warn("[ANTI-EXPLOIT] Player", player.Name, "spamming BuyUpgrade")
 		return
 	end
 
@@ -51,15 +69,28 @@ BuyUpgrade.OnServerEvent:Connect(function(player, upgradeName)
 		return
 	end
 
+	-- 🛡️ ANTI-EXPLOIT: Validar dinero
 	if money.Value < nextData.Price then
+		warn("[ANTI-EXPLOIT] Player", player.Name, "tried to buy without money. Has:", money.Value, "Needs:", nextData.Price)
 		return
 	end
 
-	-- comprar
+	-- 🛡️ ANTI-EXPLOIT: Validar nivel (no puede saltar niveles)
+	if nextLevel ~= currentLevel + 1 then
+		warn("[ANTI-EXPLOIT] Player", player.Name, "tried to skip levels")
+		return
+	end
+
+	-- ✅ comprar
 	money.Value -= nextData.Price
 	backpackLevel.Value = nextLevel
 	baseCapacity.Value = nextData.Capacity
 
 	-- 🔁 recalcular capacidad FINAL (con VIP)
 	recalcCapacity(player)
+
+	-- 🛡️ Actualizar cooldown
+	lastPurchase[userId] = now
+
+	print("[UPGRADE] Player", player.Name, "upgraded to level", nextLevel)
 end)
