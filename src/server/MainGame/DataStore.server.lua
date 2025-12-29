@@ -27,6 +27,12 @@ local function loadPlayer(player)
 	local capacity = stats:WaitForChild("Capacity")
 	local baseCapacity = stats:WaitForChild("BaseCapacity")
 
+	-- Spin stats (nuevo sistema de ruleta)
+	local spinFolder = player:WaitForChild("SpinStats", 10)
+
+	-- Esperar a que PetsHandler cree la carpeta Pets
+	local petsFolder = player:WaitForChild("Pets", 10)
+
 	local data
 	local success = pcall(function()
 		data = PlayerData:GetAsync(player.UserId)
@@ -43,6 +49,40 @@ local function loadPlayer(player)
 		player:SetAttribute("TutorialCompleted", data.TutorialCompleted or false)
 		player:SetAttribute("LastDailyReward", data.LastDailyReward or 0)
 		player:SetAttribute("DailyStreak", data.DailyStreak or 0)
+
+		-- Cargar datos de spin
+		if spinFolder then
+			local availableSpins = spinFolder:FindFirstChild("AvailableSpins")
+			local lastSpinTime = spinFolder:FindFirstChild("LastSpinTime")
+			if availableSpins then
+				availableSpins.Value = data.AvailableSpins or 1 -- Empiezan con 1 spin gratis
+			end
+			if lastSpinTime then
+				lastSpinTime.Value = data.LastSpinTime or 0
+			end
+		end
+
+		-- Cargar pets
+		if data.Pets and petsFolder then
+			for _, petData in ipairs(data.Pets) do
+				-- Soporte para formato viejo (string) y nuevo (tabla del sistema shiny)
+				local petName
+				if type(petData) == "string" then
+					-- Formato original - string simple
+					petName = petData
+				elseif type(petData) == "table" then
+					-- Formato de shiny (tabla) - extraer solo el nombre
+					petName = petData.Name or "Unknown"
+				end
+
+				if petName then
+					local newPet = Instance.new("StringValue")
+					newPet.Name = petName
+					newPet.Value = petName
+					newPet.Parent = petsFolder
+				end
+			end
+		end
 		-- NO cargar Capacity aquí, RecalcCapacityHandler lo recalculará
 	else
 		-- valores por defecto
@@ -56,6 +96,18 @@ local function loadPlayer(player)
 		player:SetAttribute("TutorialCompleted", false)
 		player:SetAttribute("LastDailyReward", 0)
 		player:SetAttribute("DailyStreak", 0)
+
+		-- Valores por defecto de spin
+		if spinFolder then
+			local availableSpins = spinFolder:FindFirstChild("AvailableSpins")
+			local lastSpinTime = spinFolder:FindFirstChild("LastSpinTime")
+			if availableSpins then
+				availableSpins.Value = 1 -- Empiezan con 1 spin gratis
+			end
+			if lastSpinTime then
+				lastSpinTime.Value = 0
+			end
+		end
 		-- NO setear Capacity aquí, RecalcCapacityHandler lo recalculará
 	end
 end
@@ -70,6 +122,30 @@ local function savePlayer(player)
 		return
 	end
 
+	-- Guardar pets
+	local pets = {}
+	local petsFolder = player:FindFirstChild("Pets")
+	if petsFolder then
+		for _, pet in ipairs(petsFolder:GetChildren()) do
+			table.insert(pets, pet.Name)
+		end
+	end
+
+	-- Obtener datos de spin
+	local spinFolder = player:FindFirstChild("SpinStats")
+	local availableSpins = 1
+	local lastSpinTime = 0
+	if spinFolder then
+		local spinsValue = spinFolder:FindFirstChild("AvailableSpins")
+		local lastTime = spinFolder:FindFirstChild("LastSpinTime")
+		if spinsValue then
+			availableSpins = spinsValue.Value
+		end
+		if lastTime then
+			lastSpinTime = lastTime.Value
+		end
+	end
+
 	local data = {
 		Money = leaderstats.Money.Value,
 		Inventory = stats.Inventory.Value,
@@ -81,6 +157,10 @@ local function savePlayer(player)
 		TutorialCompleted = player:GetAttribute("TutorialCompleted") or false,
 		LastDailyReward = player:GetAttribute("LastDailyReward") or 0,
 		DailyStreak = player:GetAttribute("DailyStreak") or 0,
+		Pets = pets,
+		-- Datos de spin
+		AvailableSpins = availableSpins,
+		LastSpinTime = lastSpinTime,
 		-- No guardar Capacity porque se recalcula automáticamente
 	}
 
